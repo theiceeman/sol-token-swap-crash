@@ -1,0 +1,24 @@
+{
+  "name": "raydium-crash",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "ts-node src/index.ts"
+  },
+  "dependencies": {
+    "@raydium-io/raydium-sdk-v2": "^0.1.23-alpha",
+    "@solana/web3.js": "^1.93.1",
+    "@types/bn.js": "^5.1.5",
+    "bn.js": "^5.2.1",
+    "bs58": "^5.0.0",
+    "decimal.js": "^10.4.3",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.8",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.2"
+  }
+}
