@@ -4,11 +4,13 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
+    "dev": "ts-node",
     "build": "tsc",
     "start": "ts-node src/index.ts"
   },
   "dependencies": {
     "@raydium-io/raydium-sdk-v2": "^0.1.23-alpha",
+    "@solana/spl-token-swap": "^0.4.3",
     "@solana/web3.js": "^1.93.1",
     "@types/bn.js": "^5.1.5",
     "bn.js": "^5.2.1",
