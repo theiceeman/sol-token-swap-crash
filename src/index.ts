@@ -1,35 +1,59 @@
-import { CLMM_PROGRAM_ID, DEVNET_PROGRAM_ID, OPEN_BOOK_PROGRAM, RAYMint, Raydium, TxVersion, USDCMint } from '@raydium-io/raydium-sdk-v2'
+import { CLMM_PROGRAM_ID, DEVNET_PROGRAM_ID, OPEN_BOOK_PROGRAM, RAYMint, Raydium, TxVersion, USDCMint, parseTokenAccountResp } from '@raydium-io/raydium-sdk-v2'
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from '@solana/spl-token'
 import { Connection, Keypair, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import Decimal from 'decimal.js'
 import BN from 'bn.js'
 import bs58 from 'bs58'
 import dotenv from "dotenv"
+import dayjs from 'dayjs'
 dotenv.config()
 
 const OWNER_PUB_KEY = process.env.OWNER_PUB_KEY;
 const OWNER_PRV_KEY = process.env.OWNER_PRV_KEY;
-const CLUSTER: 'devnet' | 'mainnet' = 'devnet';
+const CLUSTER: 'devnet' | 'mainnet-beta' = 'devnet';
 const CLUSTER_URL = process.env.RPC_URL ?? clusterApiUrl(CLUSTER);
 const connection = new Connection(CLUSTER_URL, "single");
 const txVersion = TxVersion.V0
 
+if (!OWNER_PRV_KEY) throw new Error('No prv key!');
+const ownerKeyPair: Keypair = Keypair.fromSecretKey(bs58.decode(OWNER_PRV_KEY))
+
 
 const initRaydium = async () => {
-    if (!OWNER_PRV_KEY) throw new Error('No prv key!');
-    const ownerKeyPair: Keypair = Keypair.fromSecretKey(bs58.decode(OWNER_PRV_KEY))
 
     let raydium = await Raydium.load({
         connection,
-        cluster: CLUSTER,
+        cluster: CLUSTER == 'devnet' ? 'devnet' : 'mainnet',
         owner: ownerKeyPair,
         disableFeatureCheck: true,
         disableLoadToken: true,
         blockhashCommitment: 'finalized',
     })
     // console.log({ xx: raydium.token })
+
+    raydium.account.updateTokenAccount(await fetchTokenAccountData())
+    connection.onAccountChange(ownerKeyPair.publicKey, async () => {
+        raydium!.account.updateTokenAccount(await fetchTokenAccountData())
+    })
+
     return raydium;
 }
 // initRaydium()
+const fetchTokenAccountData = async () => {
+    const solAccountResp = await connection.getAccountInfo(ownerKeyPair.publicKey)
+    const tokenAccountResp = await connection.getTokenAccountsByOwner(ownerKeyPair.publicKey, { programId: TOKEN_PROGRAM_ID })
+    const token2022Req = await connection.getTokenAccountsByOwner(ownerKeyPair.publicKey, { programId: TOKEN_2022_PROGRAM_ID })
+    const tokenAccountData = parseTokenAccountResp({
+        owner: ownerKeyPair.publicKey,
+        solAccountResp,
+        tokenAccountResp: {
+            context: tokenAccountResp.context,
+            value: [...tokenAccountResp.value, ...token2022Req.value],
+        },
+    })
+    console.log({ xxx: tokenAccountData.tokenAccounts[0] })
+    return tokenAccountData
+}
 
 
 const createPool = async () => {
@@ -39,30 +63,17 @@ const createPool = async () => {
         const raydium = await initRaydium()
 
         // you can call sdk api to get mint info or paste mint info from api: https://api-v3.raydium.io/mint/list
-        // RAY
         const mint1 = await raydium.token.getTokenInfo('CuKjdwbWLeTCVASfqzFCe4MavdhdHpx7Lx3oJfQhbGS5')
-        // USDT
         const mint2 = await raydium.token.getTokenInfo('5UNpg5XxmTf1P6tLiCuN1zuz4y5Pim3hTvCt6wTHNzeo')
         const clmmConfigs = await raydium.api.getClmmConfigs()
-        console.log({
+        return;
+        const { execute } = await raydium.clmm.createPool({
             programId: CLUSTER == "devnet" ? DEVNET_PROGRAM_ID.CLMM : CLMM_PROGRAM_ID,
-            owner: new PublicKey(OWNER_PUB_KEY),
             mint1,
             mint2,
             ammConfig: { ...clmmConfigs[0], id: new PublicKey(clmmConfigs[0].id), fundOwner: '' },
             initialPrice: new Decimal(1),
-            startTime: new BN(0),
-            txVersion
-        }); return;
-
-        /* const { execute } = await raydium.clmm.createPool({
-            programId: CLUSTER == "devnet" ? DEVNET_PROGRAM_ID.CLMM : CLMM_PROGRAM_ID,
-            owner: new PublicKey(OWNER_PUB_KEY),
-            mint1,
-            mint2,
-            ammConfig: { ...clmmConfigs[0], id: new PublicKey(clmmConfigs[0].id), fundOwner: '' },
-            initialPrice: new Decimal(1),
-            startTime: new BN(0),
+            startTime: new BN(dayjs().add(1, 'h').valueOf()),
             txVersion,
             // optional: set up priority fee here
             // computeBudgetConfig: {
@@ -72,7 +83,7 @@ const createPool = async () => {
         })
         // console.log({ xx: execute }); return;
         const { txId } = await execute()
-        console.log('clmm pool created:', { txId }) */
+        console.log('clmm pool created:', { txId })
     } catch (error: any) {
         console.error(error)
         throw new Error(error)
